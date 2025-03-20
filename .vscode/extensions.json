@@ -1,0 +1,8 @@
+{
+  "recommendations": [
+    "editorconfig.editorconfig",
+    "ms-python.vscode-pylance",
+    "ms-python.python",
+    "charliermarsh.ruff"
+  ]
+}
