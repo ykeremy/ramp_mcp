@@ -47,9 +47,19 @@ For large datasets, it is recommended to explicitly prompt Claude not to use REP
 
 ### Ramp Setup
 
+The MCP server supports two authentication methods:
+
+#### Option 1: Client Credentials Flow (Shared Application Access)
 1. Create a new client from the Ramp developer page (Profile on top right > Developer > Create app)
 2. Grant the scopes you wish (based on tools) to the client and enable client credentials (Click on App > Grant Types / Scopes)
 3. Include the client ID and secret in the config file as well as the scopes you wish to use
+
+#### Option 2: OAuth2 Access Token (Individual Employee Access)
+1. Create a new client from the Ramp developer page and enable OAuth2 authorization code flow
+2. Implement OAuth2 flow in your application to obtain an access token for each employee
+3. Use the access token directly with the MCP server for employee-specific access
+
+**Note**: OAuth2 access tokens provide employee-scoped access, meaning each employee can only access data they have permissions for in Ramp. This is ideal for individual employee usage scenarios.
 
 ### Local Setup
 
@@ -58,15 +68,29 @@ For large datasets, it is recommended to explicitly prompt Claude not to use REP
 
 ## Usage
 
+### Using Client Credentials Flow
+
 Run the MCP server from your CLI with:
 
 ```bash
 RAMP_CLIENT_ID=... RAMP_CLIENT_SECRET=... RAMP_ENV=<demo|prd> uv run ramp-mcp -s <COMMA-SEPARATED-SCOPES>
 ```
 
+### Using OAuth2 Access Token
+
+Run the MCP server from your CLI with:
+
+```bash
+RAMP_ACCESS_TOKEN=... RAMP_ENV=<demo|prd> uv run ramp-mcp -s <COMMA-SEPARATED-SCOPES>
+```
+
+**Important**: When using OAuth2 access tokens, ensure the token has the required scopes for the tools you want to use. The scopes parameter is still required for tool registration, but the actual API access is limited by the token's granted scopes.
+
 ## Configuration
 
 ### Usage with Claude Desktop
+
+#### Using Client Credentials Flow
 
 Add this to your `claude_desktop_config.json`:
 
@@ -86,6 +110,32 @@ Add this to your `claude_desktop_config.json`:
       "env": {
         "RAMP_CLIENT_ID": "<CLIENT_ID>",
         "RAMP_CLIENT_SECRET": "<CLIENT_SECRET>",
+        "RAMP_ENV": "<demo|qa|prd>"
+      }
+    }
+  }
+}
+```
+
+#### Using OAuth2 Access Token
+
+Add this to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "ramp-mcp": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/<ABSOLUTE-PATH-TO>/ramp-mcp", // make sure to update this path
+        "run",
+        "ramp-mcp",
+        "-s",
+        "transactions:read,reimbursements:read"
+      ],
+      "env": {
+        "RAMP_ACCESS_TOKEN": "<ACCESS_TOKEN>",
         "RAMP_ENV": "<demo|qa|prd>"
       }
     }

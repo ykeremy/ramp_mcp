@@ -17,6 +17,9 @@ def get_access_token_with_client_credentials(base_url: str, scopes: list[str]) -
         os.getenv("RAMP_CLIENT_ID"),
         os.getenv("RAMP_CLIENT_SECRET"),
     )
+    if not client_id or not client_secret:
+        raise ValueError("RAMP_CLIENT_ID and RAMP_CLIENT_SECRET must be set for client credentials flow")
+    
     headers = {
         "Accept": "application/json",
         "Authorization": f"Basic {base64.b64encode(f'{client_id}:{client_secret}'.encode()).decode()}",
@@ -37,6 +40,28 @@ def get_access_token_with_client_credentials(base_url: str, scopes: list[str]) -
     return response.json()["access_token"]
 
 
+def get_access_token_from_env() -> str:
+    access_token = os.getenv("RAMP_ACCESS_TOKEN")
+    if not access_token:
+        raise ValueError("RAMP_ACCESS_TOKEN must be set for OAuth2 flow")
+    return access_token
+
+
+def determine_auth_method() -> str:
+    has_client_credentials = bool(os.getenv("RAMP_CLIENT_ID") and os.getenv("RAMP_CLIENT_SECRET"))
+    has_access_token = bool(os.getenv("RAMP_ACCESS_TOKEN"))
+    
+    if has_client_credentials and has_access_token:
+        raise ValueError("Cannot use both client credentials and access token. Set either RAMP_CLIENT_ID/RAMP_CLIENT_SECRET or RAMP_ACCESS_TOKEN, not both")
+    
+    if has_client_credentials:
+        return "client_credentials"
+    elif has_access_token:
+        return "oauth2_token"
+    else:
+        raise ValueError("Must set either RAMP_CLIENT_ID/RAMP_CLIENT_SECRET for client credentials flow or RAMP_ACCESS_TOKEN for OAuth2 flow")
+
+
 class RampAsyncClient:
     """
     Lightweight wrapper around Ramp's Developer API
@@ -44,10 +69,18 @@ class RampAsyncClient:
 
     def connect(self, scopes: list[str]):
         if not self._access_token:
-            self._access_token = get_access_token_with_client_credentials(
-                self._base_url,
-                scopes,
-            )
+            auth_method = determine_auth_method()
+            if auth_method == "client_credentials":
+                self._access_token = get_access_token_with_client_credentials(
+                    self._base_url,
+                    scopes,
+                )
+            elif auth_method == "oauth2_token":
+                self._access_token = get_access_token_from_env()
+            
+            # TODO: remove this
+            print(f"Access token: {self._access_token}")
+        
         self.client = httpx.AsyncClient(
             headers={
                 "Accept": "application/json",
@@ -80,11 +113,20 @@ class RampAsyncClient:
         while _url is not None:
             if i > CLIENT_MAX_PAGES:
                 raise Exception("Too many pages, try to filter more results out.")
-            response = await self.client.get(
-                _url,
-                params=params | kwargs if not results else None,
-            )
-            response.raise_for_status()
+            try:
+                response = await self.client.get(
+                    _url,
+                    params=params | kwargs if not results else None,
+                )
+                response.raise_for_status()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 401:
+                    raise Exception("Authentication failed. Please check your access token or client credentials.")
+                elif e.response.status_code == 403:
+                    raise Exception("Access forbidden. Please ensure your token has the required scopes for this operation.")
+                else:
+                    raise
+            
             res = response.json()
             results.extend(res["data"])
 
