@@ -78,9 +78,6 @@ class RampAsyncClient:
             elif auth_method == "oauth2_token":
                 self._access_token = get_access_token_from_env()
             
-            # TODO: remove this
-            print(f"Access token: {self._access_token}")
-        
         self.client = httpx.AsyncClient(
             headers={
                 "Accept": "application/json",
